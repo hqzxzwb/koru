@@ -34,7 +34,7 @@ kotlin {
                 implementation("com.squareup:kotlinpoet-metadata:$kotlinpoetVersion")
                 implementation("com.google.devtools.ksp:symbol-processing-api:1.6.10-1.0.2")
 
-                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.6.10")
+                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.6.0")
             }
         }
 

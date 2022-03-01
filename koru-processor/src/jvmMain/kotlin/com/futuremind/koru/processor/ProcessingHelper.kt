@@ -3,23 +3,28 @@ package com.futuremind.koru.processor
 import com.squareup.kotlinpoet.*
 import com.futuremind.koru.SuspendWrapper
 import com.futuremind.koru.FlowWrapper
+import com.google.devtools.ksp.symbol.KSFunctionDeclaration
+import com.google.devtools.ksp.symbol.Modifier
 import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
+import com.squareup.kotlinpoet.ksp.KotlinPoetKspPreview
+import com.squareup.kotlinpoet.ksp.toTypeName
 import kotlinx.coroutines.flow.*
 
 
-fun FunSpec.Builder.setReturnType(originalFunSpec: FunSpec): FunSpec.Builder = when {
-    originalFunSpec.isSuspend -> this.returns(
-        SuspendWrapper::class.asTypeName().parameterizedBy(originalFunSpec.returnType.orUnit)
+@OptIn(KotlinPoetKspPreview::class)
+fun FunSpec.Builder.setReturnType(originalFunSpec: KSFunctionDeclaration): FunSpec.Builder = when {
+    originalFunSpec.modifiers.contains(Modifier.SUSPEND) -> this.returns(
+        SuspendWrapper::class.asTypeName().parameterizedBy(originalFunSpec.returnType?.toTypeName().orUnit)
     )
-    originalFunSpec.returnType.isFlow -> this.returns(
-        FlowWrapper::class.asTypeName().parameterizedBy(originalFunSpec.returnType.flowGenericType)
+    originalFunSpec.returnType?.toTypeName().isFlow -> this.returns(
+        FlowWrapper::class.asTypeName().parameterizedBy(originalFunSpec.returnType?.toTypeName().flowGenericType)
     )
-    else -> this.returns(originalFunSpec.returnType.orUnit)
+    else -> this.returns(originalFunSpec.returnType?.toTypeName().orUnit)
 }
 
-val PropertySpec.wrappedType get() = when {
-    type.isFlow -> FlowWrapper::class.asTypeName().parameterizedBy(type.flowGenericType)
-    else -> type
+val TypeName.wrappedType get() = when {
+    isFlow -> FlowWrapper::class.asTypeName().parameterizedBy(flowGenericType)
+    else -> this
 }
 
 val TypeName?.isFlow: Boolean

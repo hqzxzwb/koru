@@ -3,6 +3,7 @@ package com.futuremind.koru.processor
 import com.google.devtools.ksp.getAllSuperTypes
 import com.google.devtools.ksp.symbol.ClassKind
 import com.google.devtools.ksp.symbol.KSClassDeclaration
+import com.google.devtools.ksp.symbol.KSPropertyDeclaration
 import com.squareup.kotlinpoet.*
 import com.squareup.kotlinpoet.ksp.KotlinPoetKspPreview
 import com.squareup.kotlinpoet.ksp.toClassName
@@ -40,32 +41,6 @@ abstract class WrapperBuilder(
         }
 
     protected val superInterfacesNames = superInterfaces.map { it.name }
-
-    protected fun FunSpec.Builder.setupOverrideModifier(originalFuncSpec: FunSpec) = apply {
-        when (originalFuncSpec.overridesGeneratedInterface()) {
-            true -> this.modifiers.add(KModifier.OVERRIDE)
-            false -> this.modifiers.remove(KModifier.OVERRIDE)
-        }
-    }
-
-    protected fun PropertySpec.Builder.setupOverrideModifier(originalPropertySpec: PropertySpec) = apply {
-        when (originalPropertySpec.overridesGeneratedInterface()) {
-            true -> this.modifiers.add(KModifier.OVERRIDE)
-            false -> this.modifiers.remove(KModifier.OVERRIDE)
-        }
-    }
-
-    private fun FunSpec.overridesGeneratedInterface(): Boolean {
-
-        //not comparing types because we're comparing koru-wrapped interface with original
-        fun FunSpec.hasSameSignature(other: FunSpec) =
-            this.name == other.name && this.parameters == other.parameters
-
-        fun TypeSpec.containsFunctionSignature() =
-            this.funSpecs.any { it.hasSameSignature(this@overridesGeneratedInterface) }
-
-        return superInterfaces.any { it.typeSpec.containsFunctionSignature() }
-    }
 
     private fun PropertySpec.overridesGeneratedInterface(): Boolean {
 
