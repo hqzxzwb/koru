@@ -1,30 +1,32 @@
 package com.futuremind.koru.processor
 
+import com.google.devtools.ksp.getAllSuperTypes
+import com.google.devtools.ksp.processing.Resolver
+import com.google.devtools.ksp.symbol.KSClassDeclaration
+import com.google.devtools.ksp.symbol.KSDeclaration
 import com.squareup.kotlinpoet.TypeName
+import com.squareup.kotlinpoet.ksp.KotlinPoetKspPreview
 import com.squareup.kotlinpoet.metadata.KotlinPoetMetadataPreview
-import com.squareup.kotlinpoet.metadata.specs.ClassInspector
-import com.squareup.kotlinpoet.metadata.specs.toTypeSpec
 import java.util.*
-import javax.annotation.processing.ProcessingEnvironment
-import javax.lang.model.element.Element
-import javax.lang.model.element.TypeElement
 
 
+@OptIn(KotlinPoetKspPreview::class)
 @KotlinPoetMetadataPreview
-internal fun Collection<Element>.sortByInheritance(
-    classInspector: ClassInspector,
-    processingEnv: ProcessingEnvironment
-): List<Element> {
+internal fun MutableList<KSDeclaration>.sortByInheritance(
+    resolver: Resolver,
+): List<KSDeclaration> {
 
     val vertices = this.map { element ->
-        val name = element.getClassName(processingEnv) as TypeName
+        val name = element.getClassName(resolver) as TypeName
         Vertex(element, name)
     }
 
     val graph = Graph(vertices)
 
     vertices.forEach { vertex ->
-        val superInterfacesNames = (vertex.element as TypeElement).toTypeSpec(classInspector).superinterfaces.keys
+        val superInterfacesNames = (vertex.element as KSClassDeclaration)
+            .getAllSuperTypes()
+            .map { it.declaration.getClassName(resolver) }
         superInterfacesNames.forEach { name ->
             val from = vertices.find { it.descriptor == name }
             from?.let { graph.addEdge(from, vertex) }

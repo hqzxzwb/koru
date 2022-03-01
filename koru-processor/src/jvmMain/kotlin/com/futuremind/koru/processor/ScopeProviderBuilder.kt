@@ -3,9 +3,9 @@ package com.futuremind.koru.processor
 import com.squareup.kotlinpoet.ClassName
 import com.squareup.kotlinpoet.KModifier
 import com.squareup.kotlinpoet.PropertySpec
-import com.squareup.kotlinpoet.TypeSpec
 import java.util.Locale
 import com.futuremind.koru.ScopeProvider
+import com.google.devtools.ksp.symbol.KSClassDeclaration
 
 
 /**
@@ -14,11 +14,12 @@ import com.futuremind.koru.ScopeProvider
  */
 class ScopeProviderBuilder(
     packageName: String,
-    poetMetadataSpec: TypeSpec
+    poetMetadataSpec: KSClassDeclaration
 ) {
 
-    private val scopeProviderClassName = ClassName(packageName, poetMetadataSpec.name.toString())
-    private val scopePropertyName = "exportedScopeProvider_"+poetMetadataSpec.name!!.decapitalize(Locale.ROOT)
+    private val scopeProviderClassName = ClassName(packageName, poetMetadataSpec.simpleName.asString())
+    private val scopePropertyName = "exportedScopeProvider_"+ poetMetadataSpec.simpleName.asString()
+        .replaceFirstChar { it.lowercase(Locale.ROOT) }
 
     fun build(): PropertySpec = PropertySpec
         .builder(scopePropertyName, scopeProviderClassName, KModifier.PUBLIC)

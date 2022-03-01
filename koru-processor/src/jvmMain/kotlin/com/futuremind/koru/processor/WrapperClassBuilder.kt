@@ -3,12 +3,14 @@ package com.futuremind.koru.processor
 import com.futuremind.koru.FlowWrapper
 import com.futuremind.koru.ScopeProvider
 import com.futuremind.koru.SuspendWrapper
+import com.google.devtools.ksp.symbol.KSClassDeclaration
+import com.google.devtools.ksp.symbol.Modifier
 import com.squareup.kotlinpoet.*
 
 
 class WrapperClassBuilder(
     originalTypeName: ClassName,
-    originalTypeSpec: TypeSpec,
+    originalTypeSpec: KSClassDeclaration,
     generatedInterfaces: Map<TypeName, GeneratedInterface>,
     private val newTypeName: String,
     private val scopeProviderMemberName: MemberName?,
@@ -71,8 +73,8 @@ class WrapperClassBuilder(
         .addModifiers(KModifier.PRIVATE)
         .build()
 
-    private val functions = originalTypeSpec.funSpecs
-        .filter { !it.modifiers.contains(KModifier.PRIVATE) }
+    private val functions = originalTypeSpec.getAllFunctions()
+        .filter { !it.modifiers.contains(Modifier.PRIVATE) }
         .map { originalFuncSpec ->
             originalFuncSpec.toBuilder(name = originalFuncSpec.name)
                 .clearBody()
@@ -86,8 +88,8 @@ class WrapperClassBuilder(
                 .build()
         }
 
-    private val properties = originalTypeSpec.propertySpecs
-        .filter { !it.modifiers.contains(KModifier.PRIVATE) }
+    private val properties = originalTypeSpec.getAllProperties()
+        .filter { !it.modifiers.contains(Modifier.PRIVATE) }
         .map { originalPropertySpec ->
             PropertySpec
                 .builder(
