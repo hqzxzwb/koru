@@ -113,9 +113,7 @@ class Processor(val environment: SymbolProcessorEnvironment) : SymbolProcessor {
             freezeWrapper = annotation.freeze
         ).build()
 
-        FileSpec.builder(originalTypeName.packageName, generatedClassName)
-            .addType(classToGenerateSpec)
-            .build()
+        classToGenerateSpec
             .writeTo(File(kaptGeneratedDir))
 
     }

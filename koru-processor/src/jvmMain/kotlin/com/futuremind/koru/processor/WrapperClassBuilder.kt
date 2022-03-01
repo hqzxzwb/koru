@@ -9,85 +9,49 @@ import com.google.devtools.ksp.symbol.KSPropertyDeclaration
 import com.google.devtools.ksp.symbol.Modifier
 import com.squareup.kotlinpoet.*
 import com.squareup.kotlinpoet.ksp.KotlinPoetKspPreview
+import com.squareup.kotlinpoet.ksp.toClassName
 import com.squareup.kotlinpoet.ksp.toTypeName
 
 
 class WrapperClassBuilder(
     originalTypeName: ClassName,
-    originalTypeSpec: KSClassDeclaration,
+    private val originalTypeSpec: KSClassDeclaration,
     generatedInterfaces: Map<TypeName, GeneratedInterface>,
     private val newTypeName: String,
     private val scopeProviderMemberName: MemberName?,
     private val freezeWrapper: Boolean
-) : WrapperBuilder(originalTypeName, originalTypeSpec, generatedInterfaces) {
+) {
 
     companion object {
         private const val WRAPPED_PROPERTY_NAME = "wrapped"
         private const val SCOPE_PROVIDER_PROPERTY_NAME = "scopeProvider"
     }
 
-    private val constructorSpec = FunSpec
-        .constructorBuilder()
-        .addParameter(WRAPPED_PROPERTY_NAME, originalTypeName)
-        .addParameter(
-            ParameterSpec
-                .builder(
-                    SCOPE_PROVIDER_PROPERTY_NAME,
-                    ScopeProvider::class.asTypeName().copy(nullable = true)
-                )
-                .build()
+    private val scopeProviderPropertySpec = PropertySpec
+        .builder(
+            SCOPE_PROVIDER_PROPERTY_NAME,
+            ScopeProvider::class.asTypeName().copy(nullable = true)
         )
-        .apply {
-            if (freezeWrapper) {
-                this.addStatement(
-                    "this.%M()",
-                    MemberName("com.futuremind.koru", "freeze")
-                )
-            }
-        }
-        .build()
-
-    private val secondaryConstructorSpec = FunSpec
-        .constructorBuilder()
-        .addParameter(WRAPPED_PROPERTY_NAME, originalTypeName)
-        .callThisConstructor(
+        .initializer(
             buildCodeBlock {
-                add("%N", WRAPPED_PROPERTY_NAME)
-                add(",")
                 when (scopeProviderMemberName) {
                     null -> add("null")
                     else -> add("%M", scopeProviderMemberName)
                 }
             }
         )
-        .build()
-
-    private val wrappedClassPropertySpec = PropertySpec
-        .builder(WRAPPED_PROPERTY_NAME, originalTypeName)
-        .initializer(WRAPPED_PROPERTY_NAME)
         .addModifiers(KModifier.PRIVATE)
         .build()
 
-    private val scopeProviderPropertySpec = PropertySpec
-        .builder(
-            SCOPE_PROVIDER_PROPERTY_NAME,
-            ScopeProvider::class.asTypeName().copy(nullable = true)
-        )
-        .initializer(SCOPE_PROVIDER_PROPERTY_NAME)
-        .addModifiers(KModifier.PRIVATE)
-        .build()
-
+    @OptIn(KotlinPoetKspPreview::class)
     private val functions = originalTypeSpec.getAllFunctions()
         .filter { !it.modifiers.contains(Modifier.PRIVATE) }
         .mapNotNullTo(arrayListOf()) { originalFuncSpec ->
             FunSpec.builder(name = originalFuncSpec.simpleName.asString())
+                .receiver(originalTypeSpec.toClassName())
                 .clearBody()
                 .setFunctionBody(originalFuncSpec)
                 ?.setReturnType(originalFuncSpec)
-                ?.apply {
-                    modifiers.remove(KModifier.SUSPEND)
-                    modifiers.remove(KModifier.ABSTRACT)
-                }
                 ?.build()
         }
 
@@ -95,11 +59,15 @@ class WrapperClassBuilder(
     private val properties = originalTypeSpec.getAllProperties()
         .filter { !it.modifiers.contains(Modifier.PRIVATE) }
         .mapNotNullTo(arrayListOf()) { originalPropertySpec ->
+            if (!originalPropertySpec.type.toTypeName().isFlow) {
+                return@mapNotNullTo null
+            }
             PropertySpec
                 .builder(
                     name = originalPropertySpec.simpleName.asString(),
                     type = originalPropertySpec.type.toTypeName().wrappedType
                 )
+                .receiver(originalTypeSpec.toClassName())
                 .getter(
                     FunSpec.getterBuilder()
                         .setGetterBody(originalPropertySpec)
@@ -167,16 +135,11 @@ class WrapperClassBuilder(
         return "${WRAPPED_PROPERTY_NAME}.${this.simpleName.asString()}"
     }
 
-    fun build(): TypeSpec = TypeSpec
-        .classBuilder(newTypeName)
-        .addModifiers(modifiers)
-        .addSuperinterfaces(superInterfacesNames)
-        .primaryConstructor(constructorSpec)
-        .addFunction(secondaryConstructorSpec)
-        .addProperty(wrappedClassPropertySpec)
+    fun build(): FileSpec = FileSpec
+        .builder(originalTypeSpec.packageName.asString(), newTypeName)
         .addProperty(scopeProviderPropertySpec)
-        .addProperties(properties)
-        .addFunctions(functions)
+        .also { properties.forEach(it::addProperty) }
+        .also { functions.forEach(it::addFunction) }
         .build()
 
 }
