@@ -23,7 +23,6 @@ class WrapperClassBuilder(
 ) {
 
     companion object {
-        private const val WRAPPED_PROPERTY_NAME = "wrapped"
         private const val SCOPE_PROVIDER_PROPERTY_NAME = "scopeProvider"
     }
 
@@ -47,7 +46,8 @@ class WrapperClassBuilder(
     private val functions = originalTypeSpec.getAllFunctions()
         .filter { !it.modifiers.contains(Modifier.PRIVATE) }
         .mapNotNullTo(arrayListOf()) { originalFuncSpec ->
-            FunSpec.builder(name = originalFuncSpec.simpleName.asString())
+            FunSpec.builder(name = originalFuncSpec.simpleName.asString() + "Native")
+                .addParameters(originalFuncSpec.parameters.map { ParameterSpec(it.name!!.asString(), it.type.toTypeName()) })
                 .receiver(originalTypeSpec.toClassName())
                 .clearBody()
                 .setFunctionBody(originalFuncSpec)
@@ -64,7 +64,7 @@ class WrapperClassBuilder(
             }
             PropertySpec
                 .builder(
-                    name = originalPropertySpec.simpleName.asString(),
+                    name = originalPropertySpec.simpleName.asString() + "Native",
                     type = originalPropertySpec.type.toTypeName().wrappedType
                 )
                 .receiver(originalTypeSpec.toClassName())
@@ -128,11 +128,11 @@ class WrapperClassBuilder(
 
     private fun KSFunctionDeclaration.asInvocation(): String {
         val paramsDeclaration = parameters.joinToString(", ") { it.name?.asString().orEmpty() }
-        return "${WRAPPED_PROPERTY_NAME}.${this.simpleName.asString()}($paramsDeclaration)"
+        return "this.${this.simpleName.asString()}($paramsDeclaration)"
     }
 
     private fun KSPropertyDeclaration.asInvocation(): String {
-        return "${WRAPPED_PROPERTY_NAME}.${this.simpleName.asString()}"
+        return "this.${this.simpleName.asString()}"
     }
 
     fun build(): FileSpec = FileSpec

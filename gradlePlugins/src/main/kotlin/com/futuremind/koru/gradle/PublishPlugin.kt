@@ -23,7 +23,7 @@ class PublishPlugin : Plugin<Project> {
         val extension: PublishPluginExtension = project.extensions.create("koruPublishing")
 
         project.pluginManager.apply(PublishingPlugin::class)
-        project.pluginManager.apply(SigningPlugin::class)
+//        project.pluginManager.apply(SigningPlugin::class)
         project.pluginManager.apply(DokkaPlugin::class)
 
         project.afterEvaluate {
@@ -34,7 +34,7 @@ class PublishPlugin : Plugin<Project> {
             try {
                 val javadocJar = project.createJavaDoc()
                 project.configureMavenPublication(javadocJar, pomName, pomDescription)
-                project.configureArtifactSigning()
+//                project.configureArtifactSigning()
             } catch (e: Exception) {
                 logger.warn("Warning: Publish config missing (no local.properties), skipping.")
             }
@@ -72,7 +72,7 @@ class PublishPlugin : Plugin<Project> {
 
             publications.all {
                 version = rootProject.version
-                group = rootProject.group
+                group = "koru.ksp"
             }
 
             publications.withType(MavenPublication::class) {
@@ -104,17 +104,18 @@ class PublishPlugin : Plugin<Project> {
             repositories {
                 maven {
                     name = "Sonatype_OSS"
-                    url = uri(
-                        if (version.toString().endsWith("SNAPSHOT")) {
-                            "https://oss.sonatype.org/content/repositories/snapshots"
-                        } else {
-                            "https://oss.sonatype.org/service/local/staging/deploy/maven2"
-                        }
-                    )
-                    credentials {
-                        username = localProperties["sonatypeUsername"] as String?
-                        password = localProperties["sonatypePassword"] as String?
-                    }
+                    url = uri(File(project.rootProject.projectDir, "publish"))
+//                    url = uri(
+//                        if (version.toString().endsWith("SNAPSHOT")) {
+//                            "https://oss.sonatype.org/content/repositories/snapshots"
+//                        } else {
+//                            "https://oss.sonatype.org/service/local/staging/deploy/maven2"
+//                        }
+//                    )
+//                    credentials {
+//                        username = localProperties["sonatypeUsername"] as String?
+//                        password = localProperties["sonatypePassword"] as String?
+//                    }
                 }
             }
 

@@ -4,37 +4,30 @@ import com.futuremind.koru.*
 import com.google.devtools.ksp.KspExperimental
 import com.google.devtools.ksp.getAllSuperTypes
 import com.google.devtools.ksp.getAnnotationsByType
+import com.google.devtools.ksp.processing.CodeGenerator
 import com.google.devtools.ksp.processing.Resolver
 import com.google.devtools.ksp.processing.SymbolProcessor
 import com.google.devtools.ksp.processing.SymbolProcessorEnvironment
 import com.google.devtools.ksp.processing.SymbolProcessorProvider
 import com.google.devtools.ksp.symbol.KSAnnotated
+import com.google.devtools.ksp.symbol.KSAnnotation
 import com.google.devtools.ksp.symbol.KSClassDeclaration
 import com.google.devtools.ksp.symbol.KSDeclaration
 import com.google.devtools.ksp.symbol.KSType
 import com.squareup.kotlinpoet.*
 import com.squareup.kotlinpoet.ksp.KotlinPoetKspPreview
+import com.squareup.kotlinpoet.ksp.toClassName
 import com.squareup.kotlinpoet.ksp.toTypeName
+import com.squareup.kotlinpoet.ksp.writeTo
 import com.squareup.kotlinpoet.metadata.KotlinPoetMetadataPreview
-import java.io.File
 
 
-const val KAPT_KOTLIN_GENERATED_OPTION_NAME = "kapt.kotlin.generated"
-
-@KspExperimental
-@KotlinPoetKspPreview
 @OptIn(KotlinPoetMetadataPreview::class)
 class Processor(val environment: SymbolProcessorEnvironment) : SymbolProcessor {
 
-    fun getSupportedAnnotationTypes() = mutableSetOf(
-        ToNativeClass::class.java.canonicalName,
-        ExportedScopeProvider::class.java.canonicalName
-    )
-
     override fun process(resolver: Resolver): List<KSAnnotated> {
 
-        val kaptGeneratedDir = environment.options[KAPT_KOTLIN_GENERATED_OPTION_NAME]
-            ?: throw IllegalStateException("Cannot access kaptKotlinGeneratedDir")
+        val codeGenerator = environment.codeGenerator
 
         val scopeProviders: Map<ClassName, PropertySpec> = resolver
             .getSymbolsWithAnnotation(ExportedScopeProvider::class.java.canonicalName)
@@ -42,7 +35,7 @@ class Processor(val environment: SymbolProcessorEnvironment) : SymbolProcessor {
                 generateScopeProvider(
                     resolver = resolver,
                     element = element as KSDeclaration,
-                    targetDir = kaptGeneratedDir
+                    targetDir = codeGenerator
                 )
             }
             .toMap()
@@ -56,18 +49,19 @@ class Processor(val environment: SymbolProcessorEnvironment) : SymbolProcessor {
                     element = element as KSDeclaration,
                     generatedInterfaces = generatedInterfaces,
                     scopeProviders = scopeProviders,
-                    kaptGeneratedDir = kaptGeneratedDir
+                    targetDir = codeGenerator
                 )
             }
 
         return listOf()
     }
 
+    @OptIn(KotlinPoetKspPreview::class)
     @KotlinPoetMetadataPreview
     private fun generateScopeProvider(
         resolver: Resolver,
         element: KSDeclaration,
-        targetDir: String
+        targetDir: CodeGenerator
     ): Pair<ClassName, PropertySpec> {
 
         val packageName = element.getPackage(resolver)
@@ -82,24 +76,26 @@ class Processor(val environment: SymbolProcessorEnvironment) : SymbolProcessor {
             .builder(originalClassName.packageName, "${originalClassName.simpleName}Container")
             .addProperty(propertySpec)
             .build()
-            .writeTo(File(targetDir))
+            .writeTo(targetDir, false, listOfNotNull(element.containingFile))
 
         return originalClassName to propertySpec
 
     }
 
+    @OptIn(KspExperimental::class, com.squareup.kotlinpoet.ksp.KotlinPoetKspPreview::class)
     @KotlinPoetMetadataPreview
     private fun generateWrappedClasses(
         resolver: Resolver,
         element: KSDeclaration,
         generatedInterfaces: Map<TypeName, GeneratedInterface>,
         scopeProviders: Map<ClassName, PropertySpec>,
-        kaptGeneratedDir: String
+        targetDir: CodeGenerator
     ) {
 
         val originalTypeName = element.getClassName(resolver)
         val typeSpec = (element as KSClassDeclaration)
         val annotation = element.getAnnotationsByType(ToNativeClass::class).first()
+        val ksAnnotation = element.annotations.first { it.annotationType.toTypeName().toString() == ToNativeClass::class.java.canonicalName }
 
         val generatedClassName =
             annotation.name.nonEmptyOr("${originalTypeName.simpleName}Native")
@@ -109,37 +105,34 @@ class Processor(val environment: SymbolProcessorEnvironment) : SymbolProcessor {
             originalTypeSpec = typeSpec,
             newTypeName = generatedClassName,
             generatedInterfaces = generatedInterfaces,
-            scopeProviderMemberName = obtainScopeProviderMemberName(annotation, scopeProviders),
+            scopeProviderMemberName = obtainScopeProviderMemberName(ksAnnotation, scopeProviders),
             freezeWrapper = annotation.freeze
         ).build()
 
         classToGenerateSpec
-            .writeTo(File(kaptGeneratedDir))
+            .writeTo(targetDir, false, listOf(element.containingFile!!))
 
     }
 
+    @OptIn(KotlinPoetKspPreview::class)
     private fun obtainScopeProviderMemberName(
-        annotation: ToNativeClass,
+        annotation: KSAnnotation,
         scopeProviders: Map<ClassName, PropertySpec>
     ): MemberName? {
         //this is the dirtiest hack ever but it works :O
         //there probably is some way of doing this via kotlinpoet-metadata
         //https://area-51.blog/2009/02/13/getting-class-values-from-annotations-in-an-annotationprocessor/
-        var typeMirror: KSType? = null
-//        try {
-            annotation.launchOnScope
-//        } catch (e: MirroredTypeException) {
-//            typeMirror = e.typeMirror
-//        }
+        val annotationValue = annotation.arguments.firstOrNull { it.name?.asString() == "launchOnScope" }?.value
+        var typeMirror: KSType? = annotationValue as? KSType
         if (typeMirror != null
-            && typeMirror.toString() != "com.futuremind.koru.NoScopeProvider" //TODO do not compare strings but types
+            && typeMirror.declaration.qualifiedName?.asString() != "com.futuremind.koru.NoScopeProvider" //TODO do not compare strings but types
             && scopeProviders[typeMirror.toTypeName()] == null
         ) {
             throw IllegalStateException("$typeMirror can only be used in @ToNativeClass(launchOnScope) if it has been annotated with @ExportedScopeProvider")
         }
         return scopeProviders[typeMirror?.toTypeName()]?.let {
             MemberName(
-                packageName = (typeMirror?.toTypeName() as ClassName).packageName,
+                packageName = typeMirror!!.declaration.packageName.asString(),
                 simpleName = it.name
             )
         }
@@ -152,8 +145,8 @@ class Processor(val environment: SymbolProcessorEnvironment) : SymbolProcessor {
 
     private fun KSClassDeclaration.assertExtendsScopeProvider(resolver: Resolver) {
         val superTypeNames = getAllSuperTypes()
-            .mapTo(arrayListOf()) { it.declaration.getClassName(resolver) }
-        if (!superTypeNames.contains(ScopeProvider::class.asTypeName())) {
+            .mapTo(arrayListOf()) { it.declaration.qualifiedName?.asString() }
+        if (!superTypeNames.contains(ScopeProvider::class.asTypeName().canonicalName)) {
             throw IllegalStateException("ExportedScopeProvider can only be applied to a class extending ScopeProvider interface")
         }
     }
@@ -163,8 +156,9 @@ class Processor(val environment: SymbolProcessorEnvironment) : SymbolProcessor {
 internal fun KSDeclaration.getPackage(resolver: Resolver) =
     packageName.asString()
 
-internal fun KSDeclaration.getClassName(resolver: Resolver) =
-    ClassName(this.getPackage(resolver), this.simpleName.toString())
+internal fun KSDeclaration.getClassName(resolver: Resolver): ClassName {
+    return ClassName(this.getPackage(resolver), this.simpleName.asString())
+}
 
 data class GeneratedInterface(val name: TypeName, val typeSpec: TypeSpec)
 
