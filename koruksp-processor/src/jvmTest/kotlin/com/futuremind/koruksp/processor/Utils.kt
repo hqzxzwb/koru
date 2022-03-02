@@ -1,7 +1,10 @@
 package com.futuremind.koruksp.processor
 
+import com.google.devtools.ksp.KspExperimental
+import com.squareup.kotlinpoet.ksp.KotlinPoetKspPreview
 import com.tschuchort.compiletesting.KotlinCompilation
 import com.tschuchort.compiletesting.SourceFile
+import com.tschuchort.compiletesting.symbolProcessorProviders
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import java.io.File
@@ -48,13 +51,14 @@ fun prepareCompilation(
     tempDir: File
 ) = prepareCompilation(listOf(sourceFile), tempDir)
 
+@OptIn(KspExperimental::class, KotlinPoetKspPreview::class)
 fun prepareCompilation(
     sourceFiles: List<SourceFile>,
     tempDir: File
 ) = KotlinCompilation()
     .apply {
         workingDir = tempDir
-        annotationProcessors = listOf(Processor())
+        symbolProcessorProviders = listOf(ProcessorProvider())
         inheritClassPath = true
         sources = sourceFiles
         verbose = false
