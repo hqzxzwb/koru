@@ -100,7 +100,7 @@ class WrapperClassBuilder(
         originalFunSpec: KSFunctionDeclaration
     ): FunSpec.Builder = addCode(
         buildCodeBlock {
-            add("return %T(", SuspendWrapper::class)
+            add("return ${SuspendWrapper::class.qualifiedName}(")
             add(SCOPE_PROVIDER_PROPERTY_NAME)
             add(", ")
             add("%L", freezeWrapper)
