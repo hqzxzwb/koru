@@ -16,8 +16,8 @@ dependencies {
 gradlePlugin {
     plugins {
         create("publish") {
-            id = "com.futuremind.koru.publish"
-            implementationClass = "com.futuremind.koru.gradle.PublishPlugin"
+            id = "com.futuremind.koruksp.publish"
+            implementationClass = "com.futuremind.koruksp.gradle.PublishPlugin"
         }
     }
 }

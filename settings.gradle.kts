@@ -1,13 +1,13 @@
 rootProject.name = "Koru"
 gradle.rootProject {
-    group = "com.futuremind"
+    group = "com.futuremind.koruksp"
     version = "0.10.0"
 }
 
 
 includeBuild("gradlePlugins")
-include(":koru")
-include(":koru-processor")
+include(":koruksp")
+include(":koruksp-processor")
 
 pluginManagement {
     repositories {
