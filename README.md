@@ -1,4 +1,13 @@
-[![Maven Central](https://maven-badges.herokuapp.com/maven-central/com.futuremind/koru/badge.svg)](https://maven-badges.herokuapp.com/maven-central/com.futuremind/koru)
+[comment]: <> ([![Maven Central]&#40;https://maven-badges.herokuapp.com/maven-central/com.futuremind/koru/badge.svg&#41;]&#40;https://maven-badges.herokuapp.com/maven-central/com.futuremind/koru&#41;)
+
+# This project is forked and modified from [koru](https://github.com/FutureMind/koru).
+
+## What is modified?
+
+- Rewrite with ksp.
+- Generate extension functions instead of wrapper classes.
+- Changed package name and artifact group to avoid conflicts with the original library.
+- This README.md is modified to reflect usage of this modified project.
 
 # Koru
 
@@ -17,7 +26,7 @@ To get started, consult the Basic example below, read [introductory article](htt
 Let's say you have a class in the `shared` module, that looks like this:
 
 ```kotlin
-@ToNativeClass(name = "LoadUserUseCaseIos")
+@ToNativeClass
 class LoadUserUseCase(private val service: Service) {
 
     suspend fun loadUser(username: String) : User? = service.loadUser(username)
@@ -27,21 +36,20 @@ class LoadUserUseCase(private val service: Service) {
 
 Such use case can be easily consumed from Android code, but in Kotlin Native (e.g. iOS) suspend functions generate a completion handler which is a bit of a PITA to work with.
 
-When you add `@ToNativeClass` annotation to the class, a wrapper is generated:
+When you add `@ToNativeClass` annotation to the class, a file is generated:
 
 ```kotlin
-public class LoadUserUseCaseIos(private val wrapped: LoadUserUseCase) {
 
-  public fun loadUser(username: String): SuspendWrapper<User?> = 
-      SuspendWrapper(null) { wrapped.loadUser(username) }
+public fun LoadUserUseCase.loadUserNative(username: String): SuspendWrapper<User?> = 
+  SuspendWrapper(null) { this.loadUser(username) }
   
-}
+
 ```
 
-Notice that in place of `suspend` function, we get a function exposing `SuspendWrapper`. When you expose `LoadUserUseCaseIos` to your Swift code, it can be consumed like this:
+Notice that in place of `suspend` function, we get a function exposing `SuspendWrapper`. When you expose generated function to your Swift code, it can be consumed like this:
 
 ```swift
-loadUserUseCaseIos.loadUser(username: "foo").subscribe(
+loadUserUseCase.loadUserNative(username: "foo").subscribe(
             scope: coroutineScope, //this can be provided automatically, more on that below
             onSuccess: { user in print(user?.description() ?? "none") },
             onThrow: { error in print(error.description())}
@@ -58,14 +66,14 @@ The wrappers generate different return types based on the original member signat
 |-|-|
 | `suspend` fun returning `T` | fun returning `SuspendWrapper<T>` |
 | fun returning `Flow<T>` | fun returning `FlowWrapper<T>` |
-| fun returning `T` | fun returning `T` |
+| fun returning `T` | Nop |
 | val / var returning `Flow<T>` | val returning `FlowWrapper<T>` |
-| val / var returning `T` | val returning `T` |
+| val / var returning `T` | Nop |
 
 So, for example, this class:
 
 ```kotlin
-@ToNativeClass(name = "LoadUserUseCaseIos")
+@ToNativeClass
 class LoadUserUseCase(private val service: Service) {
 
     suspend fun loadUser(username: String) : User? = service.loadUser(username)
@@ -84,36 +92,25 @@ class LoadUserUseCase(private val service: Service) {
 becomes:
 
 ```kotlin
-public class LoadUserUseCaseIos(private val wrapped: LoadUserUseCase) {
 
-    public fun loadUser(username: String): SuspendWrapper<User?> =
-        SuspendWrapper(null) { wrapped.loadUser(username) }
 
-    public fun observeUser(username: String): FlowWrapper<User?> =
-        FlowWrapper(null, wrapped.observeUser(username))
-        
-    public fun getUser(username: String): User? = wrapped.getUser(username)
+public fun LoadUserUseCase.loadUser(username: String): SuspendWrapper<User?> =
+    SuspendWrapper(null) { this.loadUser(username) }
 
-    public val someone: User?
-        get() =  wrapped.someone
+public fun LoadUserUseCase.observeUser(username: String): FlowWrapper<User?> =
+    FlowWrapper(null, this.observeUser(username))
 
-    public val someoneFlow: FlowWrapper<User>
-        get() = com.futuremind.koru.FlowWrapper(null, wrapped.someoneFlow)
+public val LoadUserUseCase.someoneFlow: FlowWrapper<User>
+    get() = com.futuremind.koru.FlowWrapper(null, this.someoneFlow)
     
-}
+
 ```
 
 ## More options
 
-### Customizing generated names
+### ~~Customizing generated names~~
 
-You can control the name of the generated class or interface:
-- `@ToNativeClass(name = "MyFancyIosClass")`
-- `@ToNativeInterface(name = "MyFancyIosProtocol")`
-
-You can also omit the `name` parameter and use the defaults:
-- `@ToNativeClass Foo` becomes `FooNative`
-- `@ToNativeInterface Foo` becomes `FooNativeProtocol`
+This is not supported.
 
 ### Provide the scope automatically
 
@@ -139,7 +136,7 @@ And then you provide the scope like this
 Thanks to this, your Swift code can be simplified to just the callbacks, scope that launches coroutines is handled implicitly.
 
 ```swift
-loadUserUseCaseIos.loadUser(username: "some username").subscribe(
+loadUserUseCase.loadUserNative(username: "some username").subscribe(
             onSuccess: { user in print(user?.description() ?? "none") },
             onThrow: { error in print(error.description())}
         )
@@ -148,76 +145,22 @@ loadUserUseCaseIos.loadUser(username: "some username").subscribe(
 <details>
   <summary>What happens under the hood?</summary>
     
-  Under the hood, a top level property `val exportedScopeProvider_mainScopeProvider = MainScopeProvider()` is created. Then, it is injected into the constructor of the wrapped class and then into `SuspendWrapper`s and `FlowWrapper`s as the default scope that `launch`es the coroutines. Remember, that you can always override with your custom scope if you need to.
+  Under the hood, a top level property `val exportedScopeProvider_mainScopeProvider = MainScopeProvider()` is created. Then, it is injected into the generated file and then into `SuspendWrapper`s and `FlowWrapper`s as the default scope that `launch`es the coroutines. Remember, that you can always override with your custom scope if you need to.
   
   ```kotlin
-    public class LoadUserUseCaseIos(
-      private val wrapped: LoadUserUseCase,
-      private val scopeProvider: ScopeProvider?
-    ) {
-      fun flow(foo: String) = FlowWrapper(scopeProvider, wrapped.flow(foo))
-      fun suspending(foo: String) = SuspendWrapper(scopeProvider) { wrapped.suspending(foo) }
-    }
+
+  private val scopeProvider: ScopeProvider?
+
+  fun LoadUserUseCaseIos.flow(foo: String) = FlowWrapper(scopeProvider, wrapped.flow(foo))
+  fun LoadUserUseCaseIos.suspending(foo: String) = SuspendWrapper(scopeProvider) { wrapped.suspending(foo) }
+
   ```
 
 </details>
 
-### Generate interfaces from classes and classes from interfaces
+### ~~Generate interfaces from classes and classes from interfaces~~
 
-Usually you will just need to use `@ToNativeClass` on your business logic class like in the basic example. However, you can get more fancy, if you want. 
-
-#### Generate interface from class
-
-Say, you want to expose to Swift code both the class and an interface (which translates to protocol in Swift), so that you can use the protocol to create a fake impl for unit tests.
-
-```kotlin
-@ToNativeClass(name = "FooIos")
-@ToNativeInterface(name = "FooIosProtocol")
-class Foo
-```
-
-This code will create an interface and a class extending it.
-
-```kotlin
-interface FooIosProtocol
-
-class FooIos(private val wrapped: Foo) : FooIosProtocol
-```
-
-#### Generate interface from interface
-
-If you already have an interface, you can reuse it just as easily:
-
-```kotlin
-@ToNativeInterface(name = "FooIosProtocol")
-interface IFoo
-
-@ToNativeClass(name = "FooIos")
-class Foo : IFoo
-```
-
-This will also create an interface and a class and automatically match them:
-
-```kotlin
-interface FooIosProtocol
-
-class FooIos(private val wrapped: Foo) : FooIosProtocol
-```
-
-#### Generate class from interface
-
-*Not sure what the use case might be, nevertheless, it's also possible"
-
-```kotlin
-@ToNativeClass(name = "FooIos")
-interface Foo
-```
-
-Will generate:
-
-```kotlin
-class FooIos(private val wrapped: Foo)
-```
+This part is not applicable. We only generate extension functions.
 
 ## Handling in Swift code
 
@@ -226,7 +169,7 @@ You can consume the coroutine wrappers directly as callbacks. But if you are wor
 Then, you can call them like this:
 
 ```swift
-createPublisher(wrapper: loadUserUseCase.loadUser(username: "Bob"))
+createPublisher(wrapper: loadUserUseCase.loadUserNative(username: "Bob"))
     .sink(
         receiveCompletion: { completion in print("Completion: \(completion)") },
         receiveValue: { user in print("Hello from the Kotlin side \(user?.name)") }
@@ -245,7 +188,7 @@ To use the library in a KMM project, use this config in the `build.gradle.kts`:
 ```kotlin
 plugins {
     kotlin("multiplatform")
-    kotlin("kapt")
+    id("com.google.devtools.ksp") version "1.6.10-1.0.2"
     ...
 }
 
@@ -260,12 +203,7 @@ kotlin {
         val commonMain by getting {
             dependencies {
                 ...
-                implementation("com.futuremind:koru:0.10.0")
-                configurations.get("kapt").dependencies.add(
-                    org.gradle.api.internal.artifacts.dependencies.DefaultExternalModuleDependency(
-                        "com.futuremind", "koru-processor", "0.10.0"
-                    )
-                )
+                implementation("com.futuremind.koruksp:koruksp:0.10.0")
 
             }
         }
@@ -277,5 +215,12 @@ kotlin {
         
     }
     
+}
+
+dependencies {
+    val koruKspProcessor = "com.futuremind.koruksp:koruksp-processor:0.10.0"
+    add("kspIosArm64", koruKspProcessor)
+    add("kspIosX64", koruKspProcessor)
+    // ... Other ios platforms
 }
 ```
