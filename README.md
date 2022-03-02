@@ -203,7 +203,7 @@ kotlin {
         val commonMain by getting {
             dependencies {
                 ...
-                implementation("com.futuremind.koruksp:koruksp:0.10.0")
+                implementation("com.futuremind.koruksp:koruksp:0.11.0")
 
             }
         }
@@ -218,7 +218,7 @@ kotlin {
 }
 
 dependencies {
-    val koruKspProcessor = "com.futuremind.koruksp:koruksp-processor:0.10.0"
+    val koruKspProcessor = "com.futuremind.koruksp:koruksp-processor:0.11.0"
     add("kspIosArm64", koruKspProcessor)
     add("kspIosX64", koruKspProcessor)
     // ... Other ios platforms

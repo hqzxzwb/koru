@@ -1,5 +1,9 @@
 # Change Log
 
+## [0.11.0-ksp] - 2022-3-2
+
+- First version forked and modified from original repo.
+
 ## [0.10.0] - 2021-11-12
 ### Added
 - Support for generating complex inheritance hierarchies (see [#39](https://github.com/FutureMind/koru/issues/39) for details)
