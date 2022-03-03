@@ -1,7 +1,7 @@
 rootProject.name = "Koru"
 gradle.rootProject {
-    group = "com.futuremind.koruksp"
-    version = "0.11.0"
+    group = "com.github.hqzxzwb"
+    version = "0.12.0"
 }
 
 

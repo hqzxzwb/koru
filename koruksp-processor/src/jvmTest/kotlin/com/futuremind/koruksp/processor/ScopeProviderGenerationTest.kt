@@ -2,6 +2,7 @@ package com.futuremind.koruksp.processor
 
 import com.tschuchort.compiletesting.KotlinCompilation
 import com.tschuchort.compiletesting.SourceFile
+import com.tschuchort.compiletesting.kspSourcesDir
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import org.junit.jupiter.api.Test
@@ -21,8 +22,8 @@ class ScopeProviderGenerationTest {
                 """
                 package com.futuremind.kmm101.test
                 
-                import com.futuremind.koru.ExportedScopeProvider
-                import com.futuremind.koru.ScopeProvider
+                import com.futuremind.koruksp.ExportedScopeProvider
+                import com.futuremind.koruksp.ScopeProvider
                 import kotlinx.coroutines.MainScope
                 
                 @ExportedScopeProvider
@@ -43,8 +44,8 @@ class ScopeProviderGenerationTest {
             """
                 package com.futuremind.kmm101.test
                 
-                import com.futuremind.koru.ExportedScopeProvider
-                import com.futuremind.koru.ScopeProvider
+                import com.futuremind.koruksp.ExportedScopeProvider
+                import com.futuremind.koruksp.ScopeProvider
                 import kotlinx.coroutines.MainScope
                 
                 @ExportedScopeProvider
@@ -54,9 +55,11 @@ class ScopeProviderGenerationTest {
             """
         )
 
-        val compilationResult = prepareCompilation(source, tempDir).compile()
+        val compilation = prepareCompilation(source, tempDir)
+        val compilationResult = compilation.compile()
 
-        val generatedScopeProvider = compilationResult.generatedFiles
+        val generatedFiles = compilation.kspSourcesDir.walkBottomUp().toList()
+        val generatedScopeProvider = generatedFiles
             .getContentByFilename("MainScopeProviderContainer.kt")
 
         compilationResult.exitCode shouldBe KotlinCompilation.ExitCode.OK
@@ -77,8 +80,8 @@ class ScopeProviderGenerationTest {
             """
                         package com.futuremind.kmm101.test
                         
-                        import com.futuremind.koru.ExportedScopeProvider
-                        import com.futuremind.koru.ScopeProvider
+                        import com.futuremind.koruksp.ExportedScopeProvider
+                        import com.futuremind.koruksp.ScopeProvider
                         import kotlinx.coroutines.MainScope
                         
                         @ExportedScopeProvider
@@ -93,7 +96,7 @@ class ScopeProviderGenerationTest {
             """
                         package com.futuremind.kmm101.test
                         
-                        import com.futuremind.koru.ToNativeClass
+                        import com.futuremind.koruksp.ToNativeClass
                         import kotlinx.coroutines.flow.Flow
                         
                             @ToNativeClass(launchOnScope = MainScopeProvider::class)
@@ -105,23 +108,24 @@ class ScopeProviderGenerationTest {
                     """
         )
 
-        val compilationResult = prepareCompilation(
+        val compilation = prepareCompilation(
             sourceFiles = listOf(scopeProvider, classToWrap),
             tempDir = tempDir
-        ).compile()
+        )
+        val compilationResult = compilation.compile()
 
         compilationResult.exitCode shouldBe KotlinCompilation.ExitCode.OK
 
-        val generatedScopeProvider = compilationResult.generatedFiles
+        val generatedFiles = compilation.kspSourcesDir.walkBottomUp().toList()
+        val generatedScopeProvider = generatedFiles
             .getContentByFilename("MainScopeProviderContainer.kt")
 
-        val generatedClass = compilationResult.generatedFiles
-            .getContentByFilename("ImplicitScopeExample$defaultClassNameSuffix.kt")
+        val generatedClass = generatedFiles
+            .getContentByFilename("ImplicitScopeExample$defaultFileNameSuffix.kt")
 
         generatedScopeProvider shouldContain "public val exportedScopeProvider_mainScopeProvider: MainScopeProvider = MainScopeProvider()"
         generatedClass shouldContain "FlowWrapper(scopeProvider, "
         generatedClass shouldContain "SuspendWrapper(scopeProvider, "
-        generatedClass shouldContain "this(wrapped,exportedScopeProvider_mainScopeProvider)"
 
     }
 
@@ -133,8 +137,8 @@ class ScopeProviderGenerationTest {
             """
                         package com.futuremind.kmm101.test.scope
                         
-                        import com.futuremind.koru.ExportedScopeProvider
-                        import com.futuremind.koru.ScopeProvider
+                        import com.futuremind.koruksp.ExportedScopeProvider
+                        import com.futuremind.koruksp.ScopeProvider
                         import kotlinx.coroutines.MainScope
                         
                         @ExportedScopeProvider
@@ -149,7 +153,7 @@ class ScopeProviderGenerationTest {
             """
                         package com.futuremind.kmm101.test
                         
-                        import com.futuremind.koru.ToNativeClass
+                        import com.futuremind.koruksp.ToNativeClass
                         import kotlinx.coroutines.flow.Flow
                         import com.futuremind.kmm101.test.scope.MainScopeProvider
                         
@@ -162,23 +166,24 @@ class ScopeProviderGenerationTest {
                     """
         )
 
-        val compilationResult = prepareCompilation(
+        val compilation = prepareCompilation(
             sourceFiles = listOf(scopeProvider, classToWrap),
             tempDir = tempDir
-        ).compile()
+        )
+        val compilationResult = compilation.compile()
 
         compilationResult.exitCode shouldBe KotlinCompilation.ExitCode.OK
 
-        val generatedScopeProvider = compilationResult.generatedFiles
+        val generatedFiles = compilation.kspSourcesDir.walkBottomUp().toList()
+        val generatedScopeProvider = generatedFiles
             .getContentByFilename("MainScopeProviderContainer.kt")
 
-        val generatedClass = compilationResult.generatedFiles
-            .getContentByFilename("ImplicitScopeExample$defaultClassNameSuffix.kt")
+        val generatedClass = generatedFiles
+            .getContentByFilename("ImplicitScopeExample$defaultFileNameSuffix.kt")
 
         generatedScopeProvider shouldContain "public val exportedScopeProvider_mainScopeProvider: MainScopeProvider = MainScopeProvider()"
         generatedClass shouldContain "import com.futuremind.kmm101.test.scope.exportedScopeProvider_mainScopeProvider"
-        generatedClass shouldContain "this(wrapped,exportedScopeProvider_mainScopeProvider)"
-        generatedClass shouldContain "FlowWrapper<Float> = FlowWrapper(scopeProvider, "
+        generatedClass shouldContain Regex("FlowWrapper<Float>\\s*=\\s*FlowWrapper\\(scopeProvider, ")
         generatedClass shouldContain "SuspendWrapper(scopeProvider, "
     }
 
@@ -192,7 +197,7 @@ class ScopeProviderGenerationTest {
                     """
                         package com.futuremind.kmm101.test
                         
-                        import com.futuremind.koru.ToNativeClass
+                        import com.futuremind.koruksp.ToNativeClass
                         import kotlinx.coroutines.flow.Flow
                         
                             @ToNativeClass(launchOnScope = MainScopeProvider::class)
@@ -208,7 +213,7 @@ class ScopeProviderGenerationTest {
                     """
                         package com.futuremind.kmm101.test
 
-                        import com.futuremind.koru.ScopeProvider
+                        import com.futuremind.koruksp.ScopeProvider
                         import kotlinx.coroutines.MainScope
 
                         class MainScopeProvider : ScopeProvider {

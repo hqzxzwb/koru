@@ -16,6 +16,7 @@ import com.google.devtools.ksp.symbol.KSAnnotation
 import com.google.devtools.ksp.symbol.KSClassDeclaration
 import com.google.devtools.ksp.symbol.KSDeclaration
 import com.google.devtools.ksp.symbol.KSType
+import com.google.devtools.ksp.symbol.Modifier
 import com.squareup.kotlinpoet.*
 import com.squareup.kotlinpoet.ksp.KotlinPoetKspPreview
 import com.squareup.kotlinpoet.ksp.toClassName
@@ -96,6 +97,9 @@ class Processor(val environment: SymbolProcessorEnvironment) : SymbolProcessor {
 
         val originalTypeName = element.getClassName(resolver)
         val typeSpec = (element as KSClassDeclaration)
+        if (typeSpec.modifiers.contains(Modifier.PRIVATE)) {
+            throw IllegalArgumentException("Cannot wrap types with `private` modifier. Consider using internal or public.")
+        }
         val annotation = element.getAnnotationsByType(ToNativeClass::class).first()
         val ksAnnotation = element.annotations.first { it.annotationType.toTypeName().toString() == ToNativeClass::class.java.canonicalName }
 
@@ -130,7 +134,7 @@ class Processor(val environment: SymbolProcessorEnvironment) : SymbolProcessor {
             && typeMirror.declaration.qualifiedName?.asString() != "com.futuremind.koruksp.NoScopeProvider" //TODO do not compare strings but types
             && scopeProviders[typeMirror.toTypeName()] == null
         ) {
-            throw IllegalStateException("$typeMirror can only be used in @ToNativeClass(launchOnScope) if it has been annotated with @ExportedScopeProvider")
+            throw IllegalStateException("${typeMirror.declaration.qualifiedName?.asString()} can only be used in @ToNativeClass(launchOnScope) if it has been annotated with @ExportedScopeProvider")
         }
         return scopeProviders[typeMirror?.toTypeName()]?.let {
             MemberName(
